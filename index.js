@@ -1,32 +1,42 @@
-const express = require('express')
-const bodyParser = require('body-parser')
-const ejs = require('ejs')
-const mysql = require('mysql')
-const path = require('path')
-const dotenv = require('dotenv')
-const nodemailer = require('nodemailer')
-const _ = require('lodash')
-const alert = require('alert')
-const bcrypt=require('bcrypt')
-const app = express()
-const saltRounds=10;
-let signed = false
-let emai = ' '
-dotenv.config()
+const express = require('express');
+const bodyParser = require('body-parser');
+const ejs = require('ejs');
+const mysql = require('mysql');
+const path = require('path');
+const dotenv = require('dotenv');
+const nodemailer = require('nodemailer');
+const bcrypt = require('bcrypt');
+const http = require('http');
+const socketIo = require('socket.io');
+const moment = require('moment');
+const app = express();
+const server = http.createServer(app);
+const cors=require("cors");
 
-app.set('view engine', 'ejs')
-app.use(bodyParser.urlencoded({ extended: true }))
-app.use(express.static('public'))
-app.use(express.static(path.join(__dirname, 'public')))
-app.use(bodyParser.json({ limit: '50mb' }))
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }))
+const saltRounds = 10;
+let signed = false;
+let emai = ' ';
+
+dotenv.config();
+
+app.set('view engine', 'ejs');
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
+// chat code open
+app.use(cors())
+
+
 
 const connection = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_DATABASE,
-})
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_DATABASE,
+});
 
 connection.connect((err) => {
   if (err) {
@@ -79,12 +89,13 @@ connection.connect((err) => {
     }
   })
   const questiontablequery = `
-    CREATE TABLE IF NOT EXISTS questions(
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      que varchar(1000) UNIQUE,
-      answer varchar(1000) DEFAULT 'we will answer soon'
-    )
-    `
+  CREATE TABLE IF NOT EXISTS questions(
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    que TEXT,
+    answer VARCHAR(1000) DEFAULT 'we will answer soon',
+    UNIQUE(que(255))  -- Specify a key length of 255 characters
+  )
+`
   connection.query(questiontablequery, (err) => {
     if (err) {
       console.error('Error creating questions table:', err)
@@ -109,7 +120,6 @@ connection.connect((err) => {
     }
   })
 })
-
 app.get('/', function (req, res) {
   let name = 'guest'
   if (signed === true) {
@@ -142,7 +152,6 @@ app.get('/', function (req, res) {
     res.render('home', { signed, nm: name })
   }
 })
-
 app.get('/hospitals', function (req, res) {
   let name = 'guest'
   if (signed) {
@@ -172,7 +181,7 @@ app.get('/hospitals', function (req, res) {
     }
   })
 })
-
+app.use(cors())
 app.get('/FAQ', (req, res) => {
   let name = 'guest'
   if (signed) {
@@ -280,7 +289,6 @@ app.get('/FAQ', (req, res) => {
       console.error('Error fetching data:', error)
       res.status(500).send('Error fetching data')
     } else {
-      // Render the 'faq' view and pass both sets of data
       res.render('faq', { faqs, faq2, signed, nm: name })
     }
   })
@@ -622,12 +630,45 @@ app.post('/plogin', (req, res) => {
     res.status(500).send('Error signing up');
   }
 });
-const PORT = process.env.PORT || 4000
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`)
-})
+
+// chat page code
+
+
+const users = [{}]; // Initialize users array as an empty array
+
+const io = socketIo(server);
+
+app.get("/chat", (req, res) => {
+  res.send("hello");
+});
+
+io.on("connection", (socket) => {
+  console.log("New connection");
+
+  socket.on('joined', ({ user }) => {
+    users[socket.id] = user;
+    console.log(`${user} has joined`);
+    socket.emit('welcome', { user: "Doctor", message: `Welcome to the chat ,${users[socket.id]}`});
+    socket.broadcast.emit('userJoined', { user: "Admin", message: `${users[socket.id]} has Joined` });
+  });
+  
+  
+  socket.on('message',({message,id})=>{
+     io.emit('sendmessage',{user:users[id],message,id});
+  })
+
+  socket.on('disconnect', () => {
+    socket.broadcast.emit('leave', { user: "Admin", message: `${users[socket.id]} has left` })
+    console.log('user disconnected');
+  });  
+});
+
+const PORT = 4000 || process.env.PORT;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 app.use((err, req, res, next) => {
-  console.error(err.stack)
-  res.status(500).send('Something went wrong!')
-})
+  console.error(err.stack);
+  res.status(500).send('Something went wrong!');
+});
