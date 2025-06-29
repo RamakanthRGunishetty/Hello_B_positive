@@ -34,6 +34,7 @@ app.use(cors())
 const connection = mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
+    port: process.env.DB_PORT,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_DATABASE,
 });
@@ -52,7 +53,7 @@ connection.connect((err) => {
       doctor_id VARCHAR(50),
       hospital VARCHAR(255),
       hospital_address VARCHAR(255),
-      specalist VARCHAR(255),
+      specialist VARCHAR(255),
       experience VARCHAR(255),
       phone VARCHAR(20),
       email VARCHAR(255) UNIQUE,
@@ -554,11 +555,11 @@ app.post('/logout', (req, res) => {
   signed = false
   res.redirect('/')
 })
-app.get('/disease/:specalist',(req,res)=>{
+app.get('/disease/:specialist',(req,res)=>{
   let name = 'guest';
-  const t=decodeURIComponent(req.params.specalist).toLowerCase();
+  const t=decodeURIComponent(req.params.specialist).toLowerCase();
   const diseaseQuery = `
-     SELECT * FROM doctors WHERE specalist = ?
+     SELECT * FROM doctors WHERE specialist = ?
    `;
    if (signed) {
     const loginQuery = `
@@ -573,7 +574,6 @@ app.get('/disease/:specalist',(req,res)=>{
       } else {
         if (results.length > 0) {
           name = results[0].name
-          // console.log(name)
         }
       }
     })
